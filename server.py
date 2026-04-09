@@ -3,7 +3,7 @@ import socket
 import threading
 clients = []
 nicknames = []
-blacklist = ('192.168.300.5',9999)
+blacklist = ('192.168.30.5',9999)
 
 limiteur = threading.Semaphore(16)
 
@@ -26,10 +26,9 @@ def return_socket(nickname):
 
 def broadcast(message, _client):
     try:
-        while True:
-            for client in clients:
-                if client != _client:
-                    client.send(message.encode())
+        for client in clients:
+            if client != _client:
+                client.send(message.encode())
     except:
         if _client in clients:
             clients.remove(_client)
@@ -82,18 +81,18 @@ def gerer_client_exit(client, addr):
         
 def set_nickname(client_socket):
         try:
-            client.send("Bienvenue sur le serveur !entrez votre nickname :").encode()
-            client.settimeout(30)
-            client_nickname = client.recv(1024).decode().strip()
-            client.settimeout(None)
-            client.send(f"Bienvenue {client_nickname} !".encode())
+            client_socket.send("Bienvenue sur le serveur !entrez votre nickname :").encode()
+            client_socket.settimeout(30)
+            client_nickname = client_socket.recv(1024).decode().strip()
+            client_socket.settimeout(None)
+            client_socket.send(f"Bienvenue {client_nickname} !".encode())
             nicknames.append(client_nickname)
 
         except socket.timeout:  
-            print(f"[LOG] Timeout de nickname pour {client.getpeername()}")
-            client.send("Temps écoulé pour choisir un nickname. Connexion fermée.").encode()
-            client.close()
-            if client in clients: clients.remove(client)
+            print(f"[LOG] Timeout de nickname pour {client_socket.getpeername()}")
+            client_socket.send("Temps écoulé pour choisir un nickname. Connexion fermée.").encode()
+            client_socket.close()
+            if client_socket in clients: clients.remove(client_socket)
         
 def choisir_nickname_a_contacter(client_socket):
     try:
@@ -105,7 +104,7 @@ def choisir_nickname_a_contacter(client_socket):
             index=nicknames.index(nickname_a_contacter)
             return clients[index]
         else:
-            client_socket.send("l'utilisateur {} n'est pas en ligne.".format(nickname_a_contacter)).encode()
+            client_socket.send("l'utilisateur {} n'est pas en ligne.".format(nickname_a_contacter).encode())
             return None
     except socket.timeout:
         print(f"[LOG] Timeout de choix de nickname à contacter pour {client_socket.getpeername()}")
@@ -135,7 +134,7 @@ def client_to_client(client_sender,client_recv):
 
 def demander_choix(client):
     try:
-        client.send("choix de communication").encode()
+        client.send("choix de communication".encode())
         client.settimeout(60) 
         choix = client.recv(1024).decode().strip().lower()
         client.settimeout(None) 
@@ -149,7 +148,7 @@ def demander_choix(client):
             clients.remove(client)
             nickname=get_nickname(client)
             nicknames.remove(nickname)
-            client.close 
+            client.close()
 
 
 

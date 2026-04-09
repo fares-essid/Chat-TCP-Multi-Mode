@@ -26,13 +26,13 @@ def ecouter_serveur(client):
 
 
 def set_nickname(client):
-    nickname= int(input("donner votre nickname"))
-    client.send(nickname).encode()
+    nickname= input("donner votre nickname")
+    client.send(nickname.encode())
         
 
 def demande_saisie(partage):
     try:
-        while partage["choix"] !=None:
+        while partage["choix"] == None:
             partage["choix"] = input("Entrez votre commande : ")
         return partage
         
