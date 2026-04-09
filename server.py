@@ -1,10 +1,28 @@
-from http import server
+from http import client, server
 import socket
 import threading
 clients = []
+nicknames = []
 blacklist = ('192.168.300.5',9999)
 
-limiteur = threading.Semaphore(3)
+limiteur = threading.Semaphore(16)
+
+def get_nickname(client_socket):
+    try:
+        for client in clients:
+            if client_socket == client:
+                index =clients.index(client)
+            return nicknames[index]
+    finally:
+        return "Unknown"
+    
+def return_socket(nickname):
+    try:
+        for nick in nicknames:
+            index = nicknames.index(nick)
+            return clients[index]
+    finally:
+        return 'user not connected to the server'
 
 def broadcast(message, _client):
     try:
@@ -61,6 +79,80 @@ def gerer_client_exit(client, addr):
         client.close()
         clients.remove(client)
 
+        
+def set_nickname(client_socket):
+        try:
+            client.send("Bienvenue sur le serveur !entrez votre nickname :").encode()
+            client.settimeout(30)
+            client_nickname = client.recv(1024).decode().strip()
+            client.settimeout(None)
+            client.send(f"Bienvenue {client_nickname} !".encode())
+            nicknames.append(client_nickname)
+
+        except socket.timeout:  
+            print(f"[LOG] Timeout de nickname pour {client.getpeername()}")
+            client.send("Temps écoulé pour choisir un nickname. Connexion fermée.").encode()
+            client.close()
+            if client in clients: clients.remove(client)
+        
+def choisir_nickname_a_contacter(client_socket):
+    try:
+        client_socket.send("Entrez le nickname du client à contacter :").encode()
+        client_socket.settimeout(30)
+        nickname_a_contacter = client_socket.recv(1024).decode().strip()  
+        client_socket.settimeout(None)
+        if nickname_a_contacter in nicknames:
+            index=nicknames.index(nickname_a_contacter)
+            return clients[index]
+        else:
+            client_socket.send("l'utilisateur {} n'est pas en ligne.".format(nickname_a_contacter)).encode()
+            return None
+    except socket.timeout:
+        print(f"[LOG] Timeout de choix de nickname à contacter pour {client_socket.getpeername()}")
+        client_socket.send("Temps écoulé pour choisir un nickname à contacter. Connexion fermée.").encode()
+        client_socket.close()
+        mon_nickname=get_nickname(client_socket)
+        if client_socket in clients: clients.remove(client_socket)
+        if mon_nickname in nicknames: nicknames.remove(mon_nickname)
+            
+def client_to_client(client_sender,client_recv):
+    with limiteur:
+        print(f"le client_sender avec ip {client_sender.getpeername()} veut envoyer un message à {client_recv.getpeername()}")
+        try:
+            while True:
+                data_env_recv= client_sender.recv(1024).decode()
+                if not data_env_recv:
+                    break
+                else : 
+                    print(f"Message reçu de {client_sender.getpeername()} : {data_env_recv}")
+                    client_recv.send(data_env_recv.encode())
+        except ConnectionResetError:
+            pass
+        finally:
+            print(f"[LOG] Déconnexion de {client_sender.getpeername()}")
+            clients.remove(client_sender)
+            client_sender.close()
+
+def demander_choix(client):
+    try:
+        client.send("choix de communication").encode()
+        client.settimeout(60) 
+        choix = client.recv(1024).decode().strip().lower()
+        client.settimeout(None) 
+        if choix:
+            return choix
+        else :
+            client.send("pas de choix a ete enregistré").encode()
+    except socket.timeout:
+            print(f"[LOG] Timeout de choix de nickname à contacter pour {client.getpeername()}")
+            client.send("Temps écoulé pour choisir un nickname à contacter. Connexion fermée.").encode()
+            clients.remove(client)
+            nickname=get_nickname(client)
+            nicknames.remove(nickname)
+            client.close 
+
+
+
 def aiguillage(client, addr):
     try:
         if addr[0] in blacklist:
@@ -68,28 +160,32 @@ def aiguillage(client, addr):
             client.close()
             if client in clients: clients.remove(client)
             return
-        
-        client.settimeout(60) 
-        choix = client.recv(1024).decode().strip().lower()
-        client.settimeout(None) 
+        set_nickname(client)
+        while True:
+            choix= demander_choix(client)
+            if "serveur" in choix:
+                gerer_client(client, addr)  
 
-        if choix == "broadcast":
-            gerer_client_broadcast(client, addr)
-        elif "serveur" in choix:
-            gerer_client(client, addr)
-        elif choix == "exit":
-            gerer_client_exit(client, addr)
-        else:
-            client.send(b"Commande inconnue.")
+            if "client" in choix:
+                client_recv = choisir_nickname_a_contacter(client)
+                if client_recv:
+                    client_to_client(client, client_recv)
+
+            elif choix == "broadcast":
+                gerer_client_broadcast(client, addr)
+            elif choix == "exit":
+                gerer_client_exit(client, addr)
+            else:
+                client.send(b"Commande inconnue.")
+                client.close()
+                if client in clients: clients.remove(client)
+    except socket.timeout:
+            print(f"[LOG] Timeout de choix pour {addr}")
             client.close()
             if client in clients: clients.remove(client)
-    except socket.timeout:
-        print(f"[LOG] Timeout de choix pour {addr}")
-        client.close()
-        if client in clients: clients.remove(client)
     except:
-        client.close()
-        clients.remove(client)
+            client.close()
+            clients.remove(client)
 
 
 def main():
